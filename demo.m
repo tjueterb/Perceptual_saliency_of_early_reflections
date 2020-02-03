@@ -75,11 +75,11 @@ fprintf('--------- %s ---------\n', room.name)
 fprintf('Detect reflections\n')
 [er.r, er.t, er.isAudible, er.tEcho, er.tMask] = detectReflections(data.doa, data.rir, data.fs, setup.timeMax, setup.timeRange, setup.angleRange, setup.thEcho, setup.thMask, setup.eEcho, setup.eMask, data.t_mix, room.name);
 
-% ------------------------------------------------------ reduce refelctions
+%% ------------------------------------------------------ reduce reflections
 fprintf('Reduce reflections\n')
 [rr.r, rr.id, rr.isAudible] = reduceReflections(er.r, setup.reduceN, setup.reduceMethod, data.fs, room.name, true);
 
-% -------------------------------------------------- render parametric BRIR
+%% -------------------------------------------------- render parametric BRIR
 fprintf('Render parametric BRIR\n')
 rng(7)
 [brir.h, brir.er, brir.lr, brir.LRmismatch] = composeParametricBRIR(data.rir, data.doa, data.fs, rr.r, rr.isAudible, [0 0], setup.diffuseN, setup.diffuseMethod, false, false, room.name, true);

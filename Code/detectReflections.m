@@ -1,5 +1,5 @@
 % [r, t, isAudible, tEcho, tMask] = detectReflections(DOA, RIR, fs, timeMax, timeRange, angleRange, thEcho, thMask, eEcho, eMask, t_mix, doPlot)
-% detects potentially audible refelctions from a spatial impulse response
+% detects potentially audible reflections from a spatial impulse response
 % given by the pressure response RIR and the directional component DOA
 %
 % I N P U T
@@ -9,9 +9,9 @@
 % RIR          - Room impulse response of size [N x 1]
 %                (N: number of samples)
 % fs           - sampling frequency in Hz
-% timeMax      - maximum time in ms up to which refelctions are identified
+% timeMax      - maximum time in ms up to which reflections are identified
 %                after the direct sound.
-% timeRange    - [1 x 2] time in ms before and after a detected refelction for
+% timeRange    - [1 x 2] time in ms before and after a detected reflection for
 %                estimating amplitude and direction
 % angleRange   - Determines how many neighboring sound field contributions
 %                are considered to form one sound event (direct sound or
@@ -38,11 +38,11 @@
 %                reached
 % thMask       - parameters for defining the echo threshold
 %                [slope offset width depth transition_l transition_t1 transition_t2]
-% eEcho        - Determines how the energy of refelctions affects the echo
+% eEcho        - Determines how the energy of reflections affects the echo
 %                threshold
 %                [1 scale]: energy is added to the threshold after being
 %                           scaled with scale
-% eMask        - Determines how the energy of refelctions affects the
+% eMask        - Determines how the energy of reflections affects the
 %                masking threshold (see eEcho for description).
 % t_mix        - estimated perceptual mixing time in ms of the room (Is used in
 %                the plots.
@@ -56,7 +56,7 @@
 %       t      - [M x 1] vector holding the onset times of detected direct
 %                 sound and reflections in seconds
 %       n      - same as t but time in samples
-%       a      - [M x 1] vector with the amplitudes of the refelctions
+%       a      - [M x 1] vector with the amplitudes of the reflections
 %       xzy    - [M x 3] vector with the direction of the reflection in
 %                carthesian coordinates
 %       ae     - [M x 2] as xyz, but with directions in vertical polar
@@ -67,12 +67,12 @@
 %                belong to an audible reflection
 %       L_echo - gives the level of the reflection relative to the echo
 %                threshold in dB. L_echo>1 indicates an audible echo.
-%       L_mask - gives the level of the refelction relative to the masking
-%                threshold in dB. L_mask>0 indicates an audible refelction.
-% t            - list of all processed refelctions/contributions similar to
+%       L_mask - gives the level of the reflection relative to the masking
+%                threshold in dB. L_mask>0 indicates an audible reflection.
+% t            - list of all processed reflections/contributions similar to
 %                r (see above).
 % isAudible    - [N x 1] vector that equals 1 of the sample is part of an
-%                audible refelction and is 0 otherwise
+%                audible reflection and is 0 otherwise
 % tMask        - [N x 181] matrix holding the temopral evolution of the
 %                masking threshold for the lateral angles -90:1:90
 % tEcho        - [N x 181] matrix holding the temopral evolution of the
@@ -103,7 +103,7 @@
 %   DEALINGS IN THE SOFTWARE.
 
 % TRY:
-% - When refelctions are selected the reference for the angleRange is taken
+% - When reflections are selected the reference for the angleRange is taken
 %   by the single largest peak in the timeRange. This might be changed to
 %   the mean directions of all peaks within x dB from the largest peak to
 %   be more robust -> variable: levelRange. This would affect the reference
@@ -151,8 +151,8 @@ r.xyz    = nan(N, 3);   % doa in carthesian coordinates
 r.ae     = nan(N, 2);   % doa in vertical polar coordinates [azimuth elevation]
 r.lp     = nan(N, 2);   % doa in interaural polar coordinates [later polar]
 r.id     = cell(N,1);   % list of samples belonging to one sound event
-r.L_echo = nan(N, 1);   % gives refelction the level relative to the echo threshold
-r.L_mask = nan(N, 1);   % gives refelction the level relative to the mask threshold
+r.L_echo = nan(N, 1);   % gives reflection the level relative to the echo threshold
+r.L_mask = nan(N, 1);   % gives reflection the level relative to the mask threshold
 
 % list of all contributions
 t.a      = zeros(N, 1); % amplitudes
@@ -213,7 +213,7 @@ ref.n(1)   = r.n(1);
 % --------------------------------------- get list of potential reflections
 % NOTE: For simplicity the detection of audible reflections is implemented
 % in two loops. The first loop (while loop) detects all possible
-% refelctions and considers large energetic contributions first. The second
+% reflections and considers large energetic contributions first. The second
 % loop (for loop) detects audible reflections from the list generated in
 % the first loop.
 % Implementing the algorithm in a single loop should not change to much,
@@ -395,7 +395,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [a, xyz, ae, lp, timeSample, reflections] = getDOAandLevel_lp(LP, RIR, timeSample, timeRange, angleRange, isAudible, N)
     
-% --------------------------- get samples that contribute to the refelction
+% --------------------------- get samples that contribute to the reflection
 % ---- select according to timeRange
 id  = max(timeSample-timeRange(1),1):min(timeSample+timeRange(2),N);
 id2 = find(isAudible(id) == 0);
@@ -430,7 +430,7 @@ reflections = id( id2( id4 ) );
 % ------------------------------------------------------- get the amplitude
 a = sqrt(sum(rir.^2));
 
-% --------------------- get the doa of the refelction by weighted averaging
+% --------------------- get the doa of the reflection by weighted averaging
 
 % get doa VBAP style and using a weighted circular mean for the polar angle
 lat = rir.^2' * lp(:,1) / sum(rir.^2);
@@ -452,7 +452,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [a, xyz, ae, lp, timeSample, reflections] = getDOAandLevel_doa(DOA, RIR, timeSample, timeRange, angleRange, isAudible, N)
     
-% --------------------------- get samples that contribute to the refelction
+% --------------------------- get samples that contribute to the reflection
 % ---- select according to timeRange
 id  = max(timeSample-timeRange(1),0):min(timeSample+timeRange(2),N);
 id2 = find(isAudible(id) == 0);
@@ -488,7 +488,7 @@ reflections = id( id2( id4 ) );
 % ------------------------------------------------------- get the amplitude
 a = sqrt(sum(rir.^2));
 
-% --------------------- get the doa of the refelction by weighted averaging
+% --------------------- get the doa of the reflection by weighted averaging
 
 % get doa VBAP style
 xyz = rir.^2' * doa;
@@ -603,7 +603,7 @@ subplot('Position', [0.11,0.3933,0.85,0.2733])
     rir(~idAud) = 0;
     plotSRIR(rir, DOA, 'lat', fs, r.t(1)+.1, 30, false, 'scatter', {'.' 1 10}, 'R', false)
     view([0 90])
-    % mark refelction angle
+    % mark reflection angle
     hold on
     plot3(r.t*1e3, r.lp(:,1), repmat(max(get(gca, 'ZLim')), numel(r.t), 1), 'ko', 'LineWidth', 1.2)
     % plot mixing time
@@ -623,7 +623,7 @@ subplot('Position', [0.11,0.07,0.85,0.2733])
     rir(~idAud) = 0;
     plotSRIR(rir, DOA, 'pol', fs, r.t(1)+.1, 30, false, 'scatter', {'.' 1 10}, 'R', false)
     view([0 90])
-    % mark refelction angle
+    % mark reflection angle
     hold on
     plot3(r.t*1e3, r.lp(:,2), repmat(max(get(gca, 'ZLim')), numel(r.t), 1), 'ko', 'LineWidth', 1.2)
     % plot mixing time
@@ -661,7 +661,7 @@ subplot(2,1,1)
     patch([time; flipud(time)]*1e3, [Echo(:,1); flipud(Echo(:,2))]-aMax, [0.85 0.225 0.098], 'EdgeColor', [0.85 0.225 0.098], 'FaceAlpha', .5, 'EdgeAlpha', .5, 'LineWidth', 1)
     patch([time; flipud(time)]*1e3, [Mask(:,1); flipud(Mask(:,2))]-aMax, [0    0.447 0.741], 'EdgeColor', [0    0.447 0.741], 'FaceAlpha', .5, 'EdgeAlpha', .5, 'LineWidth', 1)
 
-    % plot detected refelctions
+    % plot detected reflections
     plot(r.t*1e3, db(r.a)-aMax, '.', 'color', [0.85 0.225 0.098], 'LineWidth', 1.2, 'MarkerSize', 5)
     
     % plot mixing time
@@ -672,7 +672,7 @@ subplot(2,1,1)
 
 % plot level od detected Reflections relative to masking threshold
 subplot(2,1,2)
-    % plot refelctions
+    % plot reflections
     plot(r.t(2:end)*1e3, r.L_mask(2:end), '.-k', 'LineWidth', 1.2, 'Color', [0.85 0.225 0.098 .5], 'MarkerEdgeColor', [0.85 0.225 0.098], 'MarkerSize', 15)
     xlim(Lims(1:2))
     
