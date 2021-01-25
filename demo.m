@@ -45,16 +45,19 @@ room.name          = ['ROOM-' room.volume ' REVERBERATION-' room.reverberation];
 %                                        (see detectReflections.m for help)
 setup.timeMax       = 85;
 setup.timeRange     = [.5 1];
-setup.angleRange    = [1 6 1];
-setup.thEcho        = [-0.06   0 1  0 .5 0 0];
-setup.thMask        = [-1.00 -10 1 10 .5 0 1];
+setup.angleRange    = [1 6 1 6 1];
+setup.thEcho_lat    = [-0.06   0 1  0 .5 0 0];
+setup.thEcho_pol    = [-0.06   0 1  0 .5 0 0];
+setup.thMask_lat    = [-1.00 -10 1 10 .5 0 1];
+% setup.thMask_lat    = [-1.00 -10 1 10 .5 0 1];
+setup.thMask_pol    = [-1.00 -10 1 10 .5 0 1];
 setup.eEcho         = [1 .05];
 setup.eMask         = [1 .35];
 
 
 % ----------------------- parameters for reducing the number of reflections
 %                                        (see reduceReflections.m for help)
-setup.reduceN       = 4;
+setup.reduceN       = 6;
 setup.reduceMethod  = 'loudest';
 
 
@@ -73,7 +76,7 @@ data = load(room.name);
 %% ----------------------------------------------------- detect reflections
 fprintf('--------- %s ---------\n', room.name)
 fprintf('Detect reflections\n')
-[er.r, er.t, er.isAudible, er.tEcho, er.tMask] = detectReflections(data.doa, data.rir, data.fs, setup.timeMax, setup.timeRange, setup.angleRange, setup.thEcho, setup.thMask, setup.eEcho, setup.eMask, data.t_mix, room.name);
+[er.r, er.t, er.isAudible, er.tEcho, er.tMask] = detectReflections(data.doa, data.rir, data.fs, setup.timeMax, setup.timeRange, setup.angleRange, setup.thEcho_lat, setup.thEcho_pol, setup.thMask_lat, setup.thMask_pol, setup.eEcho, setup.eMask, data.t_mix, room.name);
 
 %% ------------------------------------------------------ reduce reflections
 fprintf('Reduce reflections\n')

@@ -131,15 +131,27 @@ g_pol = reshape(g_pol,[],1);
 % interpolate polar threshold width with spherical spline interpolation
 % 1: positive width
 % 2: negative width
+% tic;
+% th_width = [
+%             AKsphSplineInterp(g_az,g_el,width* ...
+%              reshape(th_ref(:,:,1),[],1),az_ref,el_ref, 1, 0.001, 'deg', 0)
+%             AKsphSplineInterp(g_az,g_el,width* ...
+%              reshape(th_ref(:,:,2),[],1),az_ref,el_ref, 1, 0.001, 'deg', 0)
+%             ];
+% toc;tic
+% TODO: this is linear interpolation, values differ by a few degrees but
+% it is 20 times faster than spherical spline interpolation
 th_width = [
-            AKsphSplineInterp(g_az,g_el,width* ...
-             reshape(th_ref(:,:,1),[],1),az_ref,el_ref, 1, 0.001, 'deg', 0)
-            AKsphSplineInterp(g_az,g_el,width* ...
-             reshape(th_ref(:,:,2),[],1),az_ref,el_ref, 1, 0.001, 'deg', 0)
+            griddata(g_az, g_el, width*reshape(th_ref(:,:,1),[],1), ...
+                     az_ref, el_ref,'linear'); 
+            griddata(g_az, g_el, width*reshape(th_ref(:,:,2),[],1), ...
+                     az_ref, el_ref,'linear');
             ];
-% clip values to -180 <= th <= 180:
-th_width(1) = min(th_width(1), 179.999);
-th_width(2) = max(th_width(2),-179.999);
+% toc;
+        
+% clip values to -180 < th < 180:
+th_width(1) = min(th_width(1), 179.9999);
+th_width(2) = max(th_width(2),-179.9999);
 
 % set the characteristic points of the masking/threshold curve
 % th_lat = lat_ref;

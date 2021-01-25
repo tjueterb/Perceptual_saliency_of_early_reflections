@@ -1,4 +1,4 @@
-% [r, t, isAudible, tEcho, tMask] = detectReflections(DOA, RIR, fs, timeMax, timeRange, angleRange, thEcho, thMask, eEcho, eMask, t_mix, doPlot)
+% [r, t, isAudible, tEcho, tMask] = detectReflections(DOA, RIR, fs, timeMax, timeRange, angleRange, thEcho_lat, thMask_lat, eEcho, eMask, t_mix, doPlot)
 % detects potentially audible reflections from a spatial impulse response
 % given by the pressure response RIR and the directional component DOA
 %
@@ -18,25 +18,28 @@
 %                reflection). This three element vector gives the method in
 %                the first element and the parameters for first sound/echos
 %                and reflections in the second and third elements
-%                [1 w1 w1] : uses lateralThreshold.m to get the
-%                            lateral range and scales it with width (w). All
-%                            contributions within this range are considered
-%                            for one sound event, regardless of the polar
-%                            angle. A width of 6 will include all
+%                [1 w_lat1 w_lat2 w_pol1 w_pol2] : 
+%                            uses lateralThreshold.m and polarThreshold.m
+%                            to get the lateral and polar range and scales
+%                            them with width (w). All contributions within
+%                            these ranges are considered for one sound
+%                            event. Contributions outside at least one of
+%                            the ranges are considered a separate sound
+%                            event. A width of 6 will include all
 %                            distributions within timeRange.
 %                [2 g1 g2] : maximum great circle distance (g) in degree
 %                            between main contribution (largest peak) and
 %                            any other contribution. A great circle
 %                            distance of 180 will include all distributions
 %                            within timeRange.
-% thEcho       - parameters for defining the masking threshold
+% thEcho_lat       - parameters for defining the echo threshold
 %                [slope offset width depth transition_l transition_t1 transition_t2]
-%                transition_l smotheness of the transition in lateral
+%                transition_l smoothness of the transition in lateral
 %                direction
 %                transition_t1 time in ms where the depth is set to 0 dB
 %                transition_t2 time in ms after t1 until the full depth is
 %                reached
-% thMask       - parameters for defining the echo threshold
+% thMask       - parameters for defining the masking threshold
 %                [slope offset width depth transition_l transition_t1 transition_t2]
 % eEcho        - Determines how the energy of reflections affects the echo
 %                threshold
@@ -113,7 +116,7 @@
 %   direction for each sample in the large for loop. A carefully tuned
 %   threshold based on the level only of that sample might be used to speed
 %   things up.
-function [r, t, isAudible, tEcho, tMask] = detectReflections(DOA, RIR, fs, timeMax, timeRange, angleRange, thEcho, thMask, eEcho, eMask, t_mix, doPlot)
+function [r, t, isAudible, tEcho_lat, tMask_lat] = detectReflections(DOA, RIR, fs, timeMax, timeRange, angleRange, thEcho_lat, thEcho_pol, thMask_lat, thMask_pol, eEcho, eMask, t_mix, doPlot)
 
 % --------------------------------------------------- input parameter check
 if ischar(doPlot)
@@ -124,8 +127,10 @@ if ~exist('plotTitle', 'var')
     plotTitle = '';
 end
 
-thEcho(1:2) = -abs(thEcho(1:2));
-thMask(1:2) = -abs(thMask(1:2));
+thEcho_lat(1:2) = -abs(thEcho_lat(1:2));
+thMask_lat(1:2) = -abs(thMask_lat(1:2));
+thEcho_pol(1:2) = -abs(thEcho_pol(1:2));
+thMask_pol(1:2) = -abs(thMask_pol(1:2));
 
 id              = isnan(sum(DOA, 2));
 DOA(id,:)       = repmat([1 0 0], [sum(id) 1]);
@@ -165,6 +170,7 @@ t.id     = cell(N,1);
 % list of reference points
 ref.id  = nan(N, 1);
 ref.lat = nan(N, 1);
+ref.pol = nan(N, 1);
 ref.a   = nan(N, 1);
 ref.n   = nan(N, 1);
 
@@ -172,7 +178,7 @@ ref.n   = nan(N, 1);
 isAudible = false(N,1);
 
 % ------------------------------------------------------ detect first sound
-
+disp('detecting first sound')
 % get DOA in interaural polar coordinates
 [AZ, EL]      = cart2sph(DOA(:,1),DOA(:,2),DOA(:,3));
 [LAT, POL]    = sph2hor(AZ./pi.*180, EL./pi.*180);
@@ -185,15 +191,15 @@ r.n(1) = round(r.n(1));
 
 % doa, level, and refined onset
 if angleRange(1) == 1
-    [r.a(1), r.xyz(1,:), r.ae(1,:), r.lp(1,:), r.n(1), targetReflect] = getDOAandLevel_lp (LP,  RIR, r.n(1), timeRange, angleRange([1 2]), isAudible, N); % average [lat pol]
+    [r.a(1), r.xyz(1,:), r.ae(1,:), r.lp(1,:), r.n(1), targetReflect] = getDOAandLevel_lp (LP,  RIR, r.n(1), timeRange, angleRange([1 2 4]), isAudible, N); % average [lat pol]
 elseif angleRange(1) == 2
     [r.a(1), r.xyz(1,:), r.ae(1,:), r.lp(1,:), r.n(1), targetReflect] = getDOAandLevel_doa(DOA, RIR, r.n(1), timeRange, angleRange([1 2]), isAudible, N); % average [x y z]
 else
     error('implementation missing')
 end
 r.t(1)                   = r.n(1)/fs;
-r.L_echo(1)              = abs(thEcho(2));
-r.L_mask(1)              = abs(thMask(2));
+r.L_echo(1)              = abs(thEcho_lat(2));
+r.L_mask(1)              = abs(thMask_lat(2));
 r.id{1}                  = targetReflect;
 isAudible(targetReflect) = true;
 
@@ -207,6 +213,7 @@ t.id{r.n(1)}    = r.id{1};
 % reference id, direction, level, and time for the threshold curve
 ref.id(1)  = 1;
 ref.lat(1) = r.lp(1,1);
+ref.pol(1) = r.lp(1,2);
 ref.a(1)   = r.a(1);
 ref.n(1)   = r.n(1);
 
@@ -216,23 +223,22 @@ ref.n(1)   = r.n(1);
 % reflections and considers large energetic contributions first. The second
 % loop (for loop) detects audible reflections from the list generated in
 % the first loop.
-% Implementing the algorithm in a single loop should not change to much,
+% Implementing the algorithm in a single loop should not change too much,
 % but it has to be made sure that the window used to define a potential
 % reflection (using timeRange) is always centered around the largest
 % energetic contribution.
 target                = false(N, 1);
 target(1:r.n(1))      = true;
 target(targetReflect) = true;
-
+disp('getting possible reflections');tic
 while ~all(target)
     
     id       = find(target == 0);
     [~, id2] = max(abs(RIR(id)));
     n        = id(id2);
-    
     % ---- get level and direction for potential reflection belonging to the current sample
     if angleRange(1) == 1
-        [t.a(n), t.xyz(n,:), t.ae(n,:), t.lp(n,:), ~, targetReflect] = getDOAandLevel_lp (LP,  RIR, n, timeRange, angleRange([1 3]), target, N); % average [lat pol]
+        [t.a(n), t.xyz(n,:), t.ae(n,:), t.lp(n,:), ~, targetReflect] = getDOAandLevel_lp (LP,  RIR, n, timeRange, angleRange([1 3 5]), target, N); % average [lat pol]
     elseif angleRange(1) == 2
         [t.a(n), t.xyz(n,:), t.ae(n,:), t.lp(n,:), ~, targetReflect] = getDOAandLevel_doa(DOA, RIR, n, timeRange, angleRange([1 3]), target, N); % average [x y z]
     else
@@ -241,9 +247,8 @@ while ~all(target)
     
     target(targetReflect) = true;
     t.id{n}               = targetReflect;
-    
 end
-
+toc
 clear target id id2 n
 
 %% ---- blockwise rms --- %
@@ -283,14 +288,20 @@ nEchos       = 1;
 nMax = min(r.n(1)+round(timeMax/1e3*fs)+timeRange(2), N);
 
 % allocate space
-tEcho = nan(N, 181);
-tMask = tEcho;
+tEcho_lat = nan(N, 181);
+tEcho_pol = nan(N, 360);
+tMask_lat = tEcho_lat;
+tMask_pol = tEcho_pol;
+
 cumE  = nan(N, 1);
 
 % get the first entry of the masking and echo threshold
-tEcho(ref.n(nEchos),:) = ref.a(nEchos) * 10^( thEcho(2) / 20 );
-tMask(ref.n(nEchos),:) = ref.a(nEchos) * 10^( thMask(2) / 20 );
+tEcho_lat(ref.n(nEchos),:) = ref.a(nEchos) * 10^( thEcho_lat(2) / 20 );
+tEcho_pol(ref.n(nEchos),:) = ref.a(nEchos) * 10^( thEcho_pol(2) / 20 );
+tMask_lat(ref.n(nEchos),:) = ref.a(nEchos) * 10^( thMask_lat(2) / 20 );
+tMask_pol(ref.n(nEchos),:) = ref.a(nEchos) * 10^( thMask_pol(2) / 20 );
 
+disp('detecting audible reflections')
 for nn = ref.n(nEchos)+1:nMax
     
     % get cumulative energy from the latest previous reference up to the current potential reflection
@@ -304,14 +315,21 @@ for nn = ref.n(nEchos)+1:nMax
     
     cumE(nn) = sqrt(sum(RIRsq(idE)));
     
-    % thresholds for all angles
-    tEcho(nn,:) = getTH(ref.n(id), nn, ref.lat(id), -90:90, ref.a(id), thEcho, cumE(nn), eEcho, fs);
-    tMask(nn,:) = getTH(ref.n(id), nn, ref.lat(id), -90:90, ref.a(id), thMask, cumE(nn), eMask, fs);
+    % thresholds for all angles 
+    % TODO: tEcho_polar und tMask_polar auch weiter verarbeiten
+    tEcho_lat(nn,:) = getTH(ref.n(id), nn, ref.lat(id),ref.pol(id), -90:90,  ref.pol(id), ref.a(id), thEcho_lat, thEcho_pol, cumE(nn), eEcho, fs, 'lateral'); 
+    tEcho_pol(nn,:) = getTH(ref.n(id), nn, ref.lat(id),ref.pol(id), ref.lat(id), -90:269, ref.a(id), thEcho_lat, thEcho_pol, cumE(nn), eEcho, fs, 'polar'  ); 
+    tMask_lat(nn,:) = getTH(ref.n(id), nn, ref.lat(id),ref.pol(id), -90:90,  ref.pol(id), ref.a(id), thMask_lat, thMask_pol, cumE(nn), eMask, fs, 'lateral');
+    tMask_pol(nn,:) = getTH(ref.n(id), nn, ref.lat(id),ref.pol(id), ref.lat(id), -90:269, ref.a(id), thMask_lat, thMask_pol, cumE(nn), eMask, fs, 'polar'  );
     
     % make sure the masking threshold does not exceed the echo threshold
-    thRatio = min(tEcho(nn,:)) / min(tMask(nn,:));
-    if thRatio < 1
-        tMask(nn,:) = tMask(nn,:) * thRatio;
+    thRatio_lat = min(tEcho_lat(nn,:)) / min(tMask_lat(nn,:));
+    thRatio_pol = min(tEcho_pol(nn,:)) / min(tMask_pol(nn,:));
+    if thRatio_lat < 1
+        tMask_lat(nn,:) = tMask_lat(nn,:) * thRatio_lat;
+    end
+    if thRatio_pol < 1
+        tMask_pol(nn,:) = tMask_pol(nn,:) * thRatio_pol;
     end
     
     % check if the current sample is already part of r.a reflection && if
@@ -319,12 +337,12 @@ for nn = ref.n(nEchos)+1:nMax
     if ~isAudible(nn) && ~isempty(t.id{nn})
         
         % get thresholds
-        echoTH = getTH(ref.n(id), nn, ref.lat(id), t.lp(nn,1), ref.a(id), thEcho, cumE(nn), eEcho, fs);
-        maskTH = getTH(ref.n(id), nn, ref.lat(id), t.lp(nn,1), ref.a(id), thMask, cumE(nn), eMask, fs);
+        echoTH = getTH(ref.n(id), nn, ref.lat(id), ref.pol(id), t.lp(nn,1),t.lp(nn,2), ref.a(id), thEcho_lat, thEcho_pol, cumE(nn), eEcho, fs, 'both');
+        maskTH = getTH(ref.n(id), nn, ref.lat(id), ref.pol(id), t.lp(nn,1),t.lp(nn,2), ref.a(id), thMask_lat, thMask_pol, cumE(nn), eMask, fs, 'both');
         
         % make sure the masking threshold does not exceed the echo threshold
-        if thRatio < 1
-            maskTH = maskTH * thRatio;
+        if thRatio_lat < 1
+            maskTH = maskTH * thRatio_lat;
         end
         
         % test thresholds
@@ -385,8 +403,8 @@ r.L_mask = r.L_mask(1:nReflections);
 
 % -------------------------------------------------------------------- plot
 if doPlot
-    plotDetectedReflections(DOA, RIR, isAudible, fs, r, t, t_mix, N, tEcho, tMask, timeMax)
-    plot_th(r, t, tEcho, tMask, fs, N, t_mix, plotTitle);
+    plotDetectedReflections(DOA, RIR, isAudible, fs, r, t, t_mix, N, tEcho_lat, tEcho_pol, tMask_lat, tMask_pol, timeMax)
+    plot_th(r, t, tEcho_lat, tEcho_pol, tMask_lat, tMask_pol, fs, N, t_mix, plotTitle);
 end
 
 end
@@ -408,9 +426,22 @@ rir = RIR(id(id2));
 [~, id3] = max(abs(rir));
 
 if     angleRange(1) == 1
-    % select based on lateral angle
+    % select based on lateral and polar angle
     [~, latRef] = lateralThreshold([], lp(id3,1), angleRange(2));
-    id4         = lp(:,1)<=latRef(1) & lp(:,1)>=latRef(2);
+%     tic
+    [~, polRef] = polarThreshold([], lp(id3,1),lp(id3,2), angleRange(3));
+%     toc
+    if     polRef(1) > polRef(2)
+        id4     = lp(:,1)<=latRef(1) & lp(:,1)>=latRef(2) & ...
+                  lp(:,2)<=polRef(1) & lp(:,2)>=polRef(2);
+    elseif polRef(1) < polRef(2)
+       id4     = (lp(:,1)<=latRef(1) & lp(:,1)>=latRef(2)) &      ...
+                 (lp(:,2)>=polRef(2) | lp(:,2)<=polRef(1));
+    elseif polRef(1) == polRef(2)
+        error(['polRef upper and lower limit are equal. This should only',...
+              'happen if angleRange is set to 0.'])
+    end
+
 elseif angleRange(1) == 2
     % select based on great circle distance (gcd)
     gcd = acos( sin(el)*sin(el(id3)) +  cos(el)*cos(el(id3)).*cos(az-az(id3)) ) / pi * 180;
@@ -466,9 +497,21 @@ rir = RIR(id(id2));
 
 if     angleRange(1) == 1
     % select based on lateral angle
-    lat         = sph2hor(az/pi*180, el/pi*180);
+    [lat, pol]  = sph2hor(az/pi*180, el/pi*180);
     [~, latRef] = lateralThreshold([], lat(id3), angleRange(2));
-    id4         = lat<=latRef(1) & lat>=latRef(2);
+    [~, polRef] = polarThreshold([], lat(id3), pol(id3), angleRange(4));
+%     id4         = lat<=latRef(1) & lat>=latRef(2); %TODO: hier noch polar threshold mit & verknüpfungeinfügen und zyklisch richtig rechnen
+    %TODO hier nochmal genau nachprüfen ob das richtig ist
+    if     polRef(1) > polRef(2)
+        id4     = (lat<=latRef(1) & lat>=latRef(2)) & ...
+                  (pol<=polRef(1) & pol>=polRef(2));
+    elseif polRef(1) < polRef(2)
+        id4     = (lat<=latRef(1) & lat>=latRef(2)) & ...
+                  (pol>=polRef(1) | pol<=polRef(2));
+    elseif polRef(1) == polRef(2)
+        error(['polRef upper and lower limit are equal. This should only',...
+              'happen if angleRange is set to 0.'])
+    end
 elseif angleRange(1) == 2
     % select based on great circle distance (gcd)
     gcd = acos( sin(el)*sin(el(id3)) +  cos(el)*cos(el(id3)).*cos(az-az(id3)) ) / pi * 180;
@@ -506,33 +549,84 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function th = getTH(refN, targetN, refLat, latTarget, refA, TH, cumEnergy, energyMethod, fs)
+function th = getTH(refN, targetN, refLat, refPol, latTarget, polTarget, refA, TH_lat, TH_pol, cumEnergy, energyMethod, fs, thresholdMethod)
+%NOTE: latTarget and polTarget have expected to be pairs of target angles
+%(they need to have the same number of elements)
 
 % time in ms since first sound / echoed sound
 delta_t = (targetN - refN) / fs * 1e3;
 
 % ---- get the current echo threshold
 % depth
-if delta_t <= TH(6)
-    depth = 0;
-elseif delta_t <= TH(6)+TH(7)
-    depth = TH(4) * (delta_t-TH(6)) / TH(7);
+if delta_t <= TH_lat(6)
+    depth_lat = 0;
+elseif delta_t <= TH_lat(6)+TH_lat(7)
+    depth_lat = TH_lat(4) * (delta_t-TH_lat(6)) / TH_lat(7);
 else
-    depth = TH(4);
+    depth_lat = TH_lat(4);
+end
+if delta_t <= TH_pol(6)
+    depth_pol = 0;
+elseif delta_t <= TH_pol(6)+TH_pol(7)
+    depth_pol = TH_pol(4) * (delta_t-TH_pol(6)) / TH_pol(7);
+else
+    depth_pol = TH_pol(4);
 end
 
 % threshold at current time
 if energyMethod(1) == 1
-    % threshold on dB
-    th  = lateralThreshold(latTarget, refLat, TH(3), depth, TH(5));
-    % linear threshold
-    th  = 10.^(th / 20);
-    % amplitude: reference * time dependency * offset
-    thA = refA * 10^( delta_t*TH(1) / 20 ) * 10^( TH(2) / 20 );
-    % add cumulative energy
-    thA = (thA + cumEnergy*energyMethod(2));
-    % apply amplitude
-    th  = th * thA;
+    if strcmp(thresholdMethod, 'lateral')
+        % lateral threshold in dB                       
+        th  = lateralThreshold(latTarget, refLat, TH_lat(3), depth_lat, TH_lat(5));
+        % linear threshold
+        th  = 10.^(th / 20);
+        % amplitude: reference * time dependency * offset
+        thA = refA * 10^( delta_t*TH_lat(1) / 20 ) * 10^( TH_lat(2) / 20 );
+        % add cumulative energy
+        thA = (thA + cumEnergy*energyMethod(2));
+        % apply amplitude
+        th  = th * thA;
+        
+    elseif strcmp(thresholdMethod, 'polar')
+        % polar threshold in dB                                
+        th  = polarThreshold(polTarget, refLat, refPol, TH_pol(3), depth_pol, TH_pol(5)); % TODO was ist TH(3) und (5)
+        % linear threshold
+        th  = 10.^(th / 20);
+        % amplitude: reference * time dependency * offset
+        thA = refA * 10^( delta_t*TH_pol(1) / 20 ) * 10^( TH_pol(2) / 20 );
+        % add cumulative energy
+        thA = (thA + cumEnergy*energyMethod(2));
+        % apply amplitude
+        th  = th * thA;
+    
+    elseif strcmp(thresholdMethod, 'both')
+        % lateral threshold in dB                       
+        th  = lateralThreshold(latTarget, refLat, TH_lat(3), depth_lat, TH_lat(5));
+        % linear threshold
+        th  = 10.^(th / 20);
+        % amplitude: reference * time dependency * offset
+        thA = refA * 10^( delta_t*TH_lat(1) / 20 ) * 10^( TH_lat(2) / 20 );
+        % add cumulative energy
+        thA = (thA + cumEnergy*energyMethod(2));
+        % apply amplitude
+        th_lat  = th * thA;
+
+        % polar threshold in dB                                
+        th  = polarThreshold(polTarget, refLat, refPol, TH_pol(3), depth_lat, TH_pol(5)); % TODO was ist TH(3) und (5)
+        % linear threshold
+        th  = 10.^(th / 20);
+        % amplitude: reference * time dependency * offset
+        thA = refA * 10^( delta_t*TH_pol(1) / 20 ) * 10^( TH_pol(2) / 20 );
+        % add cumulative energy
+        thA = (thA + cumEnergy*energyMethod(2));
+        % apply amplitude
+        th_pol  = th * thA;
+        % TODO: FIXME: target jeweils für lat und pol machen
+        th = min(th_lat,th_pol);
+    else
+        error('select thresholdMethod ''polar'', ''lateral'' or ''both'' ')
+    end
+    
 else
     error('not defined')
 end
@@ -541,7 +635,7 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function plotDetectedReflections(DOA, RIR, isAudible, fs, r, t, t_mix, N, tEcho, tMask, timeMax)
+function plotDetectedReflections(DOA, RIR, isAudible, fs, r, t, t_mix, N, tEcho_lat, tEcho_pol, tMask_lat, tMask_pol, timeMax)
 
 %% audibility and maximum
 idAud = logical(isAudible);
@@ -556,17 +650,20 @@ ph.Name = 'SRIR';
 
 subplot('Position', [0.11,0.7167,0.85,0.2733])
     % Thresholds
-    idEcho = ~isnan(tEcho(:,1));
-    Echo   = db( [min(tEcho(idEcho,:), [], 2) max(tEcho(idEcho,:), [], 2)] );
-    Mask   = db( [min(tMask(idEcho,:), [], 2) max(tMask(idEcho,:), [], 2)] );
+    idEcho = ~isnan(tEcho_lat(:,1));
+    Echo_lat   = db( [min(tEcho_lat(idEcho,:), [], 2) max(tEcho_lat(idEcho,:), [], 2)] );
+    Echo_pol   = db( [min(tEcho_pol(idEcho,:), [], 2) max(tEcho_pol(idEcho,:), [], 2)] );
+    Mask_lat   = db( [min(tMask_lat(idEcho,:), [], 2) max(tMask_lat(idEcho,:), [], 2)] );
+    Mask_pol   = db( [min(tMask_pol(idEcho,:), [], 2) max(tMask_pol(idEcho,:), [], 2)] );
     % time vector
     time = (0:N-1)'/fs;
     time = time(idEcho);
     % max. for normalization
     aMax = db(max(abs(t.a)));
     % plot
-    patch([time; flipud(time)]*1e3, [Echo(:,1); flipud(Echo(:,2))]-aMax, [0.4940    0.1840    0.5560], 'EdgeColor', [0.4940    0.1840    0.5560], 'FaceAlpha', .5, 'EdgeAlpha', .5, 'LineWidth', 1)
-    patch([time; flipud(time)]*1e3, [Mask(:,1); flipud(Mask(:,2))]-aMax, [.266 .674 .188], 'EdgeColor', [.266 .674 .188], 'FaceAlpha', .5, 'EdgeAlpha', .5, 'LineWidth', 1)
+    patch([time; flipud(time)]*1e3, [Echo_lat(:,1); flipud(Echo_lat(:,2))]-aMax, [0.4940    0.1840    0.5560], 'EdgeColor', [0.4940    0.1840    0.5560], 'FaceAlpha', .5, 'EdgeAlpha', .5, 'LineWidth', 1)
+    patch([time; flipud(time)]*1e3, [Mask_lat(:,1); flipud(Mask_lat(:,2))]-aMax, [.266 .674 .188], 'EdgeColor', [.266 .674 .188], 'FaceAlpha', .3, 'EdgeAlpha', .5, 'LineWidth', 1)
+    patch([time; flipud(time)]*1e3, [Mask_pol(:,1); flipud(Mask_pol(:,2))]-aMax, [.850,.325,.098], 'EdgeColor', [.850,.325,.098], 'FaceAlpha', .3, 'EdgeAlpha', .5, 'LineWidth', 1)
     hold on
     % plot inaudible
     rir     = RIR/max(abs(RIR));
@@ -635,12 +732,12 @@ subplot('Position', [0.11,0.07,0.85,0.2733])
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function ph = plot_th(r, t, tEcho, tMask, fs, N, t_mix, plotTitle)
+function ph = plot_th(r, t, tEcho_lat, tEcho_pol, tMask_lat, tMask_pol, fs, N, t_mix, plotTitle)
 
 % echo/masking threshold
-id   = ~isnan(tEcho(:,1));
-Echo = db( [min(tEcho(id,:), [], 2) max(tEcho(id,:), [], 2)] );
-Mask = db( [min(tMask(id,:), [], 2) max(tMask(id,:), [], 2)] );
+id   = ~isnan(tEcho_lat(:,1));
+Echo = db( [min(tEcho_lat(id,:), [], 2) max(tEcho_lat(id,:), [], 2)] );
+Mask = db( [min(tMask_lat(id,:), [], 2) max(tMask_lat(id,:), [], 2)] );
 
 % time vector
 time = (0:N-1)'/fs;
