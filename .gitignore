@@ -336,3 +336,7 @@ Code/.DS_Store
 Code/Helper/.DS_Store
 
 .DS_Store
+
+Code/Helper/WIP_linear_step_function.m
+
+Code/script_test_polarThreshold.m
